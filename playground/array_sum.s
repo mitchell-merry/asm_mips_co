@@ -5,7 +5,7 @@ size:   .word 5
     .text
     .globl main
 main:
-    addu $s7, $0, $ra # save the return address.
+    addu $s7, $0, $ra       # save the return address.
 
     la $a0, A               # array address
     lw $a1, size            # array size
