@@ -26,7 +26,7 @@ get_size:
     j get_size                      # loop
 
 gs_exit:
-    addi $s1, $s1, -1
+    addi $s1, $s1, -1               # conversion from size to max index (for ease of use later)
 
 loop:
     add $t0, $a0, $s0               # address of x[i] in memory, the byte, not the word
