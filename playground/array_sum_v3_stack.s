@@ -27,7 +27,7 @@ main:
 #                   $a1 - array size.
 # Postcondition:    $v0 - sum of the array.
 sum:
-    # Save caller values in stack
+    # Save caller values in stack - doesn't technically follow conventions to save $t registers, but for practice.
     addi $sp, $sp, -12
     sw $t0, 8($sp)
     sw $t1, 4($sp)
