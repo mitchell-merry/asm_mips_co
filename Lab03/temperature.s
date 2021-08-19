@@ -13,24 +13,24 @@ main:                 # main has to be a global label
   li $v0,4
   syscall
 
-  li $v0,5
-  syscall
+  li $v0,5            # syscall code for read integer
+  syscall             # gets int from user and stores in $v0
   
       # CALCULATING  
-  
-  addi $t0,$v0,-32    # __??
-  mul  $t0,$t0,5      # __??
-  div  $t0,$t0,9      # __??
+  # F is stored in $v0
+  addi $t0,$v0,-32    # F-32
+  mul  $t0,$t0,5      # 5(F-32)
+  div  $t0,$t0,9      # 5/9 * (F-32)
 
       # PRINTING
 
-  la $a0,result       # __?
-  li $v0,4            # __?
-  syscall             # __?
+  la $a0,result       # prepare 'result' for printing
+  li $v0,4            # syscall code for print_string
+  syscall             # print the string at result
 
-  move $a0,$t0        # __?
-  li $v0,1            # __?
-  syscall             # __?
+  move $a0,$t0        # $a0 = C (prepare the actual result for printing)
+  li $v0,1            # syscall code for print_int
+  syscall             # print the celsius result to screen
 
   .data
 input:  .asciiz "\n\nEnter temperature in Fahrenheit: "

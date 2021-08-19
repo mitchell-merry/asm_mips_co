@@ -4,7 +4,8 @@
 # places variables __?? ... __?? in registers __?? ... __??
 #                        |                           |
 #             list of variables          list of registers
-#
+# Mitchell Merry
+# 19726120
 #
   .data
   .globl  message  
