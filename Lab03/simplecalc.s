@@ -21,13 +21,15 @@ main:                       # main has to be a global label
 
         # CALCULATING
 
-  addi  $s1, $0, 12         # store 12 in s1
-  addi  $s2, $0, -2         # store -2 in s2
-  addi  $s3, $0, 13         # store 13 in s3
-  addi  $s4, $0, 3          # store 3 in s4
-  add   $t0, $s1, $s2       # add 12 and -2 to t0 (10)
-  sub   $t1, $s3, $s4       # subtract 13 and 3 to t1 (10)
-  sub   $s0, $t0, $t1       # subtract 10 and 10 to s0 (0)
+  addi  $s1, $0, 12         # g=12
+  addi  $s2, $0, -2         # h=-2
+  addi  $s3, $0, 13         # i=13
+  addi  $s4, $0, 3          # j=3
+  addi  $s5, $0, 5          # k=5
+  add   $t0, $s1, $s2       # (g+h)
+  sub   $t1, $s3, $s4       # (i-j)
+  add   $t1, $t1, $s5       # (i-j+k)
+  sub   $s0, $t0, $t1       # (g+h)-(i-j+k)
 
         # PRINTING
         
