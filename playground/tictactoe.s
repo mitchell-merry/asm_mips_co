@@ -119,7 +119,7 @@ __gl_win:
 __m_exit:
     jal print_board
     nop
-    
+
     j exit_program              # exit program
 
 # init: Initalises program registers and values to an empty game of
@@ -241,7 +241,7 @@ __sc_exit:
 check_win:
     # Push values onto the stack
     addi $sp, $sp, -16          # check_win
-    sw $s0, 12($sp)              # loop counter
+    sw $s0, 12($sp)             # loop counter
     sw $a1, 8($sp)              # used to pass to check_win_row and column
     sw $a0, 4($sp)              # used for syscalls
     sw $ra, 0($sp)
