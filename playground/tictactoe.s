@@ -1,6 +1,6 @@
 # Program that plays a game of tic-tac-toe, entirely in MIPS assembly.
-# Register descriptions:
-# $s0 - current board turn
+# Mitchell Merry, 2021
+
     .data
     .align 2
 board: # 2d 3x3 array containing -1, 0, or 1
@@ -19,12 +19,17 @@ column_prompt: .asciiz "Column (0-2): "
 header_msg_1: .asciiz "\n==Player "
 header_msg_2: .asciiz "'s turn==\n"
 set_cell_occupied: .asciiz "Cell already occupied.\n"
+win_msg_1: .asciiz "\nPlayer "
+win_msg_2: .asciiz " has won!\n"
+draw_msg: .asciiz "\nThe game was a tie.\n"
+
     .text
     .globl main
 main:
     # Push values onto the stack
-    addi $sp, $sp, -24          # main
-    sw $s3, 20($sp)             # used to store current turn
+    addi $sp, $sp, -32          # main
+    sw $s4, 28($sp)             # win check
+    sw $s3, 24($sp)             # used to store current turn (1/-1)
     sw $s2, 20($sp)             # used to store column user input
     sw $s1, 16($sp)             # used to store row user input
     sw $s0, 12($sp)             # game_loop counter (turn)
@@ -79,23 +84,53 @@ gl_get_inputs:
 
     bne $v0, $0, gl_get_inputs  # if the cell was occupied (returned a non-zero error code), get inputs again
 
+    # check for win!
+    move $a0, $s3               # pass in the current player
+    jal check_win
+    nop
+    bne $v0, $0, __gl_win       # if true, jump out of the loop and print win message
+
     li $t0, 9                   # board turn limit
     addi $s0, $s0, 1            # increment board turn counter
     bne $s0, $t0, game_loop     # loop if board turn limit not reached
     
-    jal print_board
+## End loop - draw state
+
+    li $v0, 4                   # syscall code for print_str
+    la $a0, draw_msg            # result was a draw
+    syscall
+    j __m_exit
+
+__gl_win:
+
+    # a player won! ($s3)
+    li $v0, 4                   # syscall code for print_str
+    la $a0, win_msg_1           # print first half of win message
+    syscall
+
+    move $a0, $s3               # pass in the turn
+    jal print_char              # print the char of the player who won
     nop
 
+    li $v0, 4
+    la $a0, win_msg_2           # pass in the second half
+    syscall
 
-    j exit_program
+__m_exit:
+    jal print_board
+    nop
+    
+    j exit_program              # exit program
 
 # init: Initalises program registers and values to an empty game of
 #       tic-tac-toe at turn 0.
 # Precondition: None
 # Postcondition:
-#   Board Turn - $s0 - set to 0.
+#   Board Turn -    $s0 = 0
+#   Win check  -    $s4 = 0
 init:
     li $s0, 0                   # Initialise board-turn to 0
+    li $s0, 0                   # Initialise win-check to 0
 
     # Print completed initialisation message
     li $v0, 4                   # syscall code for print_str
@@ -200,6 +235,222 @@ __sc_exit:
 
     jr $ra
 
+# check_win: Checks if the given player has a win on the board.
+# Precondition:     $a0 - player's value (1 or -1)
+# Postcondition:    $v0 - 0 if no win, 1 if win
+check_win:
+    # Push values onto the stack
+    addi $sp, $sp, -16          # check_win
+    sw $s0, 12($sp)              # loop counter
+    sw $a1, 8($sp)              # used to pass to check_win_row and column
+    sw $a0, 4($sp)              # used for syscalls
+    sw $ra, 0($sp)
+
+    ## TODO update stack
+
+    ## ROWS
+    li $s0, 0                   # initialise as a row counter
+__cw_rows:
+                                # pass player to check_win_row
+    move $a1, $s0               # pass current row to check_win_row
+    jal check_win_row           # check if win in row
+    nop
+    bne $v0, $0, __cw_ret       # if the function returned a non-zero value, interpret as true and return (true)
+
+    li $t0, 3                   # max loop count
+    addi $s0, $s0, 1            # i++
+    bne $s0, $t0, __cw_rows     # loop if not at max
+
+    ## end __cw_rows loop
+
+    ## COLUMNS - identical to rows loop.
+    li $s0, 0                   # initialise as a column counter
+__cw_columns:
+                                # pass player to check_win_column
+    move $a1, $s0               # pass current column to check_win_column
+    jal check_win_column        # check if win in column
+    nop
+    bne $v0, $0, __cw_ret       # if the function returned a non-zero value, interpret as true and return (true)
+
+    li $t0, 3                   # max loop count
+    addi $s0, $s0, 1            # i++
+    bne $s0, $t0, __cw_columns  # loop if not at max
+
+    ## DIAGONALS
+    addi $a1, $0, 1             # pass diagonal direction 1 to check_win_diag
+    jal check_win_diag
+    nop
+    bne $v0, $0, __cw_ret       # if the function returned a non-zero value, interpret as true and return (true)
+
+    addi $a1, $0, -1            # pass diagonal direction -1 to check_win_diag
+    jal check_win_diag
+    nop
+    bne $v0, $0, __cw_ret       # if the function returned a non-zero value, interpret as true and return (true)
+
+    li $v0, 0                   # if no win was found, return false
+
+__cw_ret:
+    # Pop values off the stack and restore
+    lw $ra, 0($sp)
+    lw $a0, 4($sp)
+    lw $a0, 8($sp)
+    lw $s0, 12($sp)
+    addi $sp, $sp, 16
+
+    jr $ra
+
+# check_win_row: Checks if the given player has a win in the given row.
+# Precondition:     $a0 - player's value (1 or -1)
+#                   $a1 - row index (0-2)
+# Postcondition:    $v0 - 0 if no win, 1 if win
+check_win_row:
+    # Push values onto the stack
+    addi $sp, $sp, -28          # check_win_row
+    sw $a1, 24($sp)             # used to pass in column to get_cell
+    sw $a0, 20($sp)             # used to pass in row to get_cell
+    sw $s3, 16($sp)             # stores current return value
+    sw $s2, 12($sp)             # stores the passed row
+    sw $s1, 8($sp)              # stores player value
+    sw $s0, 4($sp)              # loop counter
+    sw $ra, 0($sp)
+
+    li $s0, 0                   # initialise cell counter to 0
+    move $s1, $a0               # store player value
+    move $s2, $a1               # store passed row
+    li $s3, 0                   # by default, return 0
+
+__cwr_cells:
+    move $a0, $s2               # pass row to get_cell
+    move $a1, $s0               # pass current column to get_cell
+    jal get_cell                # get value at cell
+    nop
+    bne $v0, $s1, __cwr_ret     # if not equal to player value, it's not a win - return (false)
+
+    li $t0, 3                   # max loop count
+    addi $s0, $s0, 1            # i++
+    bne $s0, $t0, __cwr_cells   # loop if not at max
+
+    li $s3, 1                   # if it made it here, it was a win (all cells equal to player value)
+
+__cwr_ret:
+    move $v0, $s3
+
+    # Pop values off the stack and restore
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    lw $a0, 20($sp)
+    lw $a1, 24($sp)
+    addi $sp, $sp, 28
+
+    jr $ra
+
+# check_win: Checks if the given player has a win in the given row.
+# Precondition:     $a0 - player's value (1 or -1)
+#                   $a1 - column index (0-2)
+# Postcondition:    $v0 - 0 if no win, 1 if win
+check_win_column:
+    # Push values onto the stack
+    addi $sp, $sp, -28          # check_win_column
+    sw $a1, 24($sp)             # used to pass in column to get_cell
+    sw $a0, 20($sp)             # used to pass in row to get_cell
+    sw $s3, 16($sp)             # stores current return value
+    sw $s2, 12($sp)             # stores the passed column
+    sw $s1, 8($sp)              # stores player value
+    sw $s0, 4($sp)              # loop counter
+    sw $ra, 0($sp)
+
+    li $s0, 0                   # initialise cell counter to 0
+    move $s1, $a0               # store player value
+    move $s2, $a1               # store passed column
+    li $s3, 0                   # by default, return 0
+
+__cwc_cells:
+    move $a0, $s0               # pass current row to get_cell
+    move $a1, $s2               # pass column to get_cell
+    jal get_cell                # get value at cell
+    nop
+    bne $v0, $s1, __cwc_ret     # if not equal to player value, it's not a win - return (false)
+
+    li $t0, 3                   # max loop count
+    addi $s0, $s0, 1            # i++
+    bne $s0, $t0, __cwc_cells   # loop if not at max
+
+    li $s3, 1                   # if it made it here, it was a win (all cells equal to player value)
+
+__cwc_ret:
+    move $v0, $s3
+
+    # Pop values off the stack and restore
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    lw $a0, 20($sp)
+    lw $a1, 24($sp)
+    addi $sp, $sp, 28
+
+    jr $ra
+
+# check_win_diag: Checks a win in the given diagonal
+# Precondition:     $a0 - player value (1 or -1)
+#                   $a1 - direction of diagonal (1 for left-right, -1 for right-left)
+# Postcondition:    $v0 - 0 if no win, 1 if win
+check_win_diag:
+    # Push values onto the stack
+    addi $sp, $sp, -32          # check_win_diag
+    sw $a1, 28($sp)             # used to pass in column to get_cell
+    sw $a0, 24($sp)             # used to pass in row to get_cell
+    sw $s4, 20($sp)             # stores current return value
+    sw $s3, 16($sp)             # stores the diag direction
+    sw $s2, 12($sp)             # stores the player value
+    sw $s1, 8($sp)              # stores the current column
+    sw $s0, 4($sp)              # loop counter (current row)
+    sw $ra, 0($sp)
+
+    li $s0, 0                   # initialise row counter to 0
+    move $s2, $a0               # store player value
+    move $s3, $a1               # store diag direction
+    li $s4, 0                   # by default, return 0
+
+    li $s1, 0                   # initialise column counter
+    li $t0, 1                   
+    beq $t0, $a1, __cwd_cells    # if direction is 1, column counter to 0
+    li $s1, 2                   # otherwise column counter to 2
+
+__cwd_cells:
+    move $a0, $s0               # pass current counter to get_cell as row
+    move $a1, $s1               # pass column to get_cell
+    jal get_cell                # get value at cell
+    nop
+    bne $v0, $s2, __cwd_ret     # if not equal to player value, it's not a win - return (false)
+
+    li $t0, 3                   # max loop count
+    addi $s0, $s0, 1            # i++
+    add $s1, $s1, $s3           # move the column counter in the given direction
+    bne $s0, $t0, __cwd_cells   # loop if not at max
+
+    li $s4, 1                   # if it made it here, it was a win (all cells equal to player value)
+
+__cwd_ret:
+    move $v0, $s4
+
+    # Pop values off the stack and restore
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    lw $s4, 20($sp)
+    lw $a0, 24($sp)
+    lw $a1, 28($sp)
+    addi $sp, $sp, 32
+
+    jr $ra
+
 # print_board: Prints an ASCII representation of the current board state to the console.
 # 1 is X, -1 is O, and 0 is a blank space
 # Precondition / Postcondition: None
@@ -238,7 +489,6 @@ __pb_loop:
 
     ## End loop
 __pb_l_end:
-
     # Pop values off the stack
     lw $ra, 0($sp)
     lw $a0, 4($sp)
@@ -385,6 +635,7 @@ print_char:
     sw $a0, 0($sp)              # used for syscalls
 
     li $v0, 4                   # syscall code for print_str
+    move $s0, $a0
 
     li $t0, 1
     la $a0, X                   # if the value is 1, print X
@@ -414,30 +665,55 @@ __pc_print:
 # Postcondition:    $v0 - value from the user
 read_int_between:
     # Push onto the stack
-    addi $sp, $sp, -8           # read_int_between
-    sw $s0, 4($sp)              # used to store minimum val
-    sw $a0, 0($sp)              # used for syscalls
+    addi $sp, $sp, -20          # read_int_between
+    sw $s0, 16($sp)             # used to store minimum val
+    sw $a2, 12($sp)             # used to pass value to is_between
+    sw $a0, 8($sp)              # used for syscalls
+    sw $s1, 4($sp)              # used to store prompt address
+    sw $ra, 0($sp)              
 
     move $s0, $a0
+    move $s2, $a2
 
 rib_loop:
     li $v0, 4                   # syscall code for print_string
-    move $a0, $a2               # print the prompt
+    move $a0, $s2               # print the prompt
     syscall
 
     li $v0, 5                   # syscall code for read_int
     syscall                     # take in the value of N to $v0
 
-    sle $t2, $s0, $v0           # minimum <= N
-    sle $t3, $v0, $a1           # N <= maximum
-    bne $t2, $t3, rib_loop      # loop if both are not true. They cannot both be simultaneously false
-                                # so this guarantees that 1 <= N <= 9
-
-    # Pop values off the stack and restore
-    lw $a0, 0($sp)
-    lw $s0, 4($sp)
-    addi $sp, $sp, 4
+    move $a0, $s0               # pass in minimum to is_between
+    move $a2, $v0               # pass value to is_between (maximum is already passed)
+    jal is_between
+    nop
+    beq $v0, $0, rib_loop       # loop if not between (returns false)
+    move $v0, $a2               # return succesful value
     
+    # Pop values off the stack and restore
+    lw $ra, 0($sp)
+    lw $s1, 4($sp)
+    lw $a0, 8($sp)
+    lw $a2, 12($sp)
+    lw $s0, 16($sp)
+    addi $sp, $sp, 20
+    
+    jr $ra
+    
+# is_between: Returns true/false depending on if $a2 is between the range [$a0, $a1].
+#                   Prompts until a valid value is entered.
+# Precondition:     $a0 - minimum value
+#                   $a1 - maximum value
+#                   $a2 - value
+# Postcondition:    $v0 - value from the user
+is_between:
+    sle $t2, $a0, $a2           # minimum <= N
+    sle $t3, $a2, $a1           # N <= maximum
+
+    li $v0, 1
+    beq $t2, $t3, __ib_ret      # if both are true, return true. otherwise return false.
+    li $v0, 0                   # they cannot be simultaneously false, so $t2==$t3 suffices
+__ib_ret:
     jr $ra
 
 # Exits the program - usual stuff
@@ -449,7 +725,9 @@ exit_program:
     lw $s0, 12($sp)             
     lw $s1, 16($sp)            
     lw $s2, 20($sp)             
-    addi $sp, $sp, -24          
+    lw $s3, 24($sp)            
+    lw $s4, 28($sp)             
+    addi $sp, $sp, 32
 
     jr $ra
     nop
