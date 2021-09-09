@@ -45,35 +45,34 @@ main:
     nop
 
 # Calculates the $a0th fibonacci number, recursively.
+# F(1) = 1, F(0) = 0
 # Precondition:     $a0 - n
 # Postcondition:    $v0 - the nth fibonacci number.
+#                   $v1 - the (n-1)th fibonacci number.
 fib:
     # Save to the stack
-    addi $sp, $sp, -12
-    sw $s0, 8($sp)              # save s0 (preserved between calls)
+    addi $sp, $sp, -16
+    sw $s1, 12($sp)              # use as F(n-2)
+    sw $s0, 8($sp)              # use as F(n-1)
     sw $a0, 4($sp)              # save the argument
     sw $ra, 0($sp)              # save return address
 
-    # Return n if n is <= 1 (undefined for n < 0)
-    sle $t0, $a0, 1             # n <= 1?
+    # Return 1, 1 if n is <= 2 (undefined for n < 0)
+    sle $t0, $a0, 2             # n <= 1?
     li $t1, 1                   # true value
-    move $v0, $a0               # return n if true
-    beq $t0, $t1, fib_exit      # if n<=1 is true return n
+    addi $v0, $0, 1             # return 1 if true
+    addi $v1, $0, 1             # even though F(-1) can be described as = 0, for simplicity of this implementation we return 1 (to align with F(1))
+    beq $t0, $t1, fib_exit      # if n<=1 is true return 1 for $v0 and $v1
 
     # Calculate Fn-1
     addi $a0, $a0, -1           # pass n-1
-    jal fib                     # calculate fn-1
+    jal fib                     # calculate fn-1 and fn-2
     nop 
-    move $s0, $v0               # store result in $s0
-                                # (gets preserved between calls)
-    
-    # Calculate Fn-2
-    addi $a0, $a0, -1           # pass n-2
-    jal fib                     # calculate fn-2
-    nop
-    move $t1, $v0               # store result in $t1
-    
-    add $v0, $s0, $t1           # Fn = Fn-1 + Fn-2
+    move $s0, $v0               # store F(n-1) in $s0
+    move $s1, $v1               # store F(n-2) in $s1
+
+    add $v0, $s0, $s1           # Fn = Fn-1 + Fn-2
+    add $v1, $s0, $0            # Fn-1 = Fn-2 (as we move up the stack)
 
     nop
 
@@ -82,7 +81,8 @@ fib_exit:
     lw $ra, 0($sp)
     lw $a0, 4($sp)
     lw $s0, 8($sp)
-    addi $sp, $sp, 12
+    lw $s1, 12($sp)
+    addi $sp, $sp, 16
     
     jr $ra
     nop
